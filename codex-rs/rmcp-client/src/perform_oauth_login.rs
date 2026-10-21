@@ -299,7 +299,11 @@ fn spawn_callback_server(
                     issuer,
                 }) => {
                     let response = Response::from_string(
-                        "Authentication complete. You may close this window.",
+                        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Authentication complete</title></head><body><p>Authentication complete. You may close this window.</p></body></html>",
+                    )
+                    .with_header(
+                        tiny_http::Header::from_bytes("Content-Type", "text/html; charset=UTF-8")
+                            .expect("valid HTML content type"),
                     );
                     if let Err(err) = request.respond(response) {
                         eprintln!("Failed to respond to OAuth callback: {err}");
@@ -1100,6 +1104,19 @@ mod tests {
             anyhow::ensure!(
                 response.starts_with("HTTP/1.1 200"),
                 "OAuth callback failed: {response}"
+            );
+            let (headers, body) = response
+                .split_once("\r\n\r\n")
+                .ok_or_else(|| anyhow::anyhow!("OAuth callback response should include a body"))?;
+            anyhow::ensure!(
+                headers
+                    .lines()
+                    .any(|line| line.eq_ignore_ascii_case("Content-Type: text/html; charset=UTF-8")),
+                "OAuth callback should be an HTML document: {headers}"
+            );
+            anyhow::ensure!(
+                body.starts_with("<!doctype html>"),
+                "OAuth callback should render HTML"
             );
             Ok(())
         })
